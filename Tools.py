@@ -1,4 +1,4 @@
-from Profile import Profile
+from metametamerge.Profile import Profile
 import numpy as np
 
 class Tools(Profile):

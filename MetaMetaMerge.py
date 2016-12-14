@@ -28,13 +28,13 @@ np.set_printoptions(suppress=True, precision=16, threshold=10000000)
 import argparse, os
 from collections import defaultdict
 
-from Tools import Tools
-from Databases import Databases
-from Profile import Profile
-from Ranks import Ranks
+from metametamerge.Tools import Tools
+from metametamerge.Databases import Databases
+from metametamerge.Profile import Profile
+from metametamerge.Ranks import Ranks
 
-from parse_tax import parse_tax
-from parse_files import parse_files
+from metametamerge.parse_tax import parse_tax
+from metametamerge.parse_files import parse_files
 
 def hmean(l): return len(l) / sum(1. / val for val in l)
 
