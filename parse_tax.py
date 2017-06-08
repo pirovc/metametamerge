@@ -1,13 +1,18 @@
 from collections import defaultdict
 
-def parse_tax(names_file,nodes_file,ranks):
+def parse_tax(names_file,nodes_file,merged_file,ranks):
 	all_names_scientific = defaultdict(list)
 	all_names_other = defaultdict(list)
 	nodes = {}
+	merged = {}
 	
 	for l in open(nodes_file,'r'):
-		fields = l.split('\t|\t')
-		nodes[int(fields[0])] = {'parent':int(fields[1]),'rank':fields[2],'name':''}
+		taxid, parent_taxid, rank, _ = l.split('\t|\t',3)
+		nodes[int(taxid)] = {'parent':int(parent_taxid),'rank':rank,'name':''}
+	
+	for l in open(merged_file,'r'):
+		old_taxid, new_taxid, _ = l.rstrip().split('\t|',2)
+		merged[int(old_taxid)] = int(new_taxid)
 	
 	for l in open(names_file,'r'):
 		fields = l.split('\t|\t')
@@ -30,4 +35,4 @@ def parse_tax(names_file,nodes_file,ranks):
 			if nc=="scientific name" or not nodes[taxid]['name']:
 				nodes[taxid]['name'] = fields[1]
 
-	return all_names_scientific, all_names_other, nodes
+	return all_names_scientific, all_names_other, nodes, merged

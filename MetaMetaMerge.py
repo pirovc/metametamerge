@@ -28,18 +28,23 @@ np.set_printoptions(suppress=True, precision=16, threshold=10000000)
 import argparse, os
 from collections import defaultdict
 
-from metametamerge.Tools import Tools
-from metametamerge.Databases import Databases
-from metametamerge.Profile import Profile
-from metametamerge.Ranks import Ranks
-
-from metametamerge.parse_tax import parse_tax
-from metametamerge.parse_files import parse_files
+# from metametamerge.Tools import Tools
+# from metametamerge.Databases import Databases
+# from metametamerge.Profile import Profile
+# from metametamerge.Ranks import Ranks
+# from metametamerge.parse_tax import parse_tax
+# from metametamerge.parse_files import parse_files
+from Tools import Tools
+from Databases import Databases
+from Profile import Profile
+from Ranks import Ranks
+from parse_tax import parse_tax
+from parse_files import parse_files
 
 def hmean(l): return len(l) / sum(1. / val for val in l)
 
 def main():
-	version = '1.0'
+	version = '1.1'
 	
 	parser = argparse.ArgumentParser(description='MetaMetaMerge')
 	parser.add_argument('-i', metavar='<input_files>', dest="input_files", nargs="*", help="Input binning or profiling files. Bioboxes or tsv format (see README)")
@@ -48,6 +53,7 @@ def main():
 	parser.add_argument('-c', metavar='<tool_method>', dest="tool_method", type=str, help="Tools' method on the same order of the input files. p -> profiling / b -> binning")
 	parser.add_argument('-n', metavar='<names_file>', dest="names_file", type=str, help="names.dmp from the NCBI Taxonomy database")
 	parser.add_argument('-e', metavar='<nodes_file>', dest="nodes_file", type=str, help="nodes.dmp from the NCBI Taxonomy database")
+	parser.add_argument('-m', metavar='<merged_file>', dest="merged_file", type=str, help="merged.dmp from the NCBI Taxonomy database")
 
 	parser.add_argument('-b', metavar='<bins>', dest="bins", type=int, default=4,  help="Number of bins. Default: 4")
 	parser.add_argument('-r', metavar='<cutoff>', dest="cutoff", type=float, default=0.0001, help="Minimum abundance/Maximum results for each taxonomic level (0: off / 0-1: minimum relative abundance / >=1: maximum number of identifications). Default: 0.0001") 	
@@ -75,6 +81,7 @@ def main():
 	print("Methods: %s" % args.tool_method)
 	print("Names.dmp: %s" % args.names_file)
 	print("Nodes.dmp: %s" % args.nodes_file)
+	print("Merged.dmp: %s" % args.merged_file)
 	print("Mode: %s" % args.mode)
 	print("Cutoff: %s" % args.cutoff)
 	print("Bins: %s" % args.bins)
@@ -85,23 +92,25 @@ def main():
 
 	# all_names_scientific, all_names_other -> defaultdict((name,rank): taxid})
 	# nodes -> {taxid:{'parent':taxid,'rank':rank}} **** all nodes.dmp + names.dmp
-	all_names_scientific, all_names_other, nodes = parse_tax(args.names_file, args.nodes_file, ranks)
+	all_names_scientific, all_names_other, nodes, merged = parse_tax(args.names_file, args.nodes_file, args.merged_file, ranks)
 
 	# Database profiles
 	D = []
 	dbs_count = defaultdict(int)
 	for database_file in args.database_profiles:
-		db = Databases(database_file, parse_files(database_file, 'db', all_names_scientific, all_names_other, nodes, ranks), ranks)
+		db = Databases(database_file, parse_files(database_file, 'db', all_names_scientific, all_names_other, nodes, merged, ranks), ranks)
 		D.append(db)
 		# dbs_count -> {taxid: count}
 		for taxid in db.getCol('TaxID'): dbs_count[taxid]+=1
 
+	return
+	
 	# Tools results
 	T = []
 	identifiers = args.tool_identifier.split(",")
 	methods = args.tool_method.split(",")
 	for idx,input_file in enumerate(args.input_files):
-		T.append(Tools(input_file, identifiers[idx], methods[idx], parse_files(input_file, methods[idx], all_names_scientific, all_names_other, nodes, ranks), ranks, D[idx]))
+		T.append(Tools(input_file, identifiers[idx], methods[idx], parse_files(input_file, methods[idx], all_names_scientific, all_names_other, nodes, merged, ranks), ranks, D[idx]))
 
 	# Print tool output for plots (before cutoff - only with normalized/estimated abundances - without entries not found in the DB!!)
 	# if args.ground_truth:
@@ -190,8 +199,9 @@ def main():
 			#mode[(rankid,p)] = (x,1) if p==3 else (x,0)
 			print("Rank: %s \t Presence: %s \t N.Orgs: %d \t Cutoff: %d (%.2f%%) " % (ranks.getRankName(rankid), p, x, mode[(rankid,p)][0]*mode[(rankid,p)][1], mode[(rankid,p)][1]*100))
 			# For each subset selected
-			for pr in subset_pres.getRow(0,mode[(rankid,p)][0]*mode[(rankid,p)][1]):
-				profile_merged_kpres.append([pr['Presence'],rankid,pr['TaxID'],pr['Abundance']])
+			if x:
+				for pr in subset_pres.getRow(0,int(mode[(rankid,p)][0]*mode[(rankid,p)][1])):
+					profile_merged_kpres.append([pr['Presence'],rankid,pr['TaxID'],pr['Abundance']])
 		print()
 
 	# Add as a tool (+ normalize the abundance)

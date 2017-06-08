@@ -1,4 +1,5 @@
-from metametamerge.Profile import Profile
+#from metametamerge.Profile import Profile
+from Profile import Profile
 
 class Databases(Profile):
 
