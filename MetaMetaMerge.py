@@ -51,6 +51,7 @@ def main():
 	parser.add_argument('-d', metavar='<database_profiles>', dest="database_profiles", nargs="*", help="Database profiles on the same order of the input files (see README)")
 	parser.add_argument('-t', metavar='<tool_identifier>', dest="tool_identifier", type=str, help="Identifiers on the same order of the input files")
 	parser.add_argument('-c', metavar='<tool_method>', dest="tool_method", type=str, help="Tools' method on the same order of the input files. p -> profiling / b -> binning")
+	
 	parser.add_argument('-n', metavar='<names_file>', dest="names_file", type=str, help="names.dmp from the NCBI Taxonomy database")
 	parser.add_argument('-e', metavar='<nodes_file>', dest="nodes_file", type=str, help="nodes.dmp from the NCBI Taxonomy database")
 	parser.add_argument('-m', metavar='<merged_file>', dest="merged_file", type=str, help="merged.dmp from the NCBI Taxonomy database")
@@ -60,6 +61,7 @@ def main():
 	parser.add_argument('-f', metavar='<mode>', dest="mode", type=str, default="linear",  help="Result mode (precise, very-precise, linear, sensitive, very-sensitive). Default: linear")
 	parser.add_argument('-s', metavar='<reversed_output>', dest="reversed_output", default=1, type=int, help="Consider only species level identifications and estimate upper taxonomic level identifications from it (0/1). Default: 1")
 	
+	parser.add_argument('--verbose', action='store_true')
 	parser.add_argument('-l', metavar='<detailed_output>', dest="detailed_output", default=0, type=int, help="Generate an additional detailed output (0/1). Default: 0")
 	parser.add_argument('-o', metavar='<output_file>', dest="output_file", type=str, help="Output file")
 	
@@ -72,11 +74,11 @@ def main():
 	output_folder = os.path.dirname(args.output_file)
 
 	print("- - - - - - - - - - - - - - - - - - - - -")
-	print("|\t\t\tMetaMetaMerge %s\t\t\t|" % version)
+	print("           MetaMetaMerge %s" % version)
 	print("- - - - - - - - - - - - - - - - - - - - -")
-	print("Ranks: %s" % ranks.ranks)
-	print("Input files: %s" % args.input_files)
-	print("Database profiles: %s" % args.database_profiles)
+	print("Ranks: %s" % ', '.join(ranks.ranks))
+	print("Input files: %s" % ', '.join(args.input_files))
+	print("Database profiles: %s" % ', '.join(args.database_profiles))
 	print("Identifiers: %s" % args.tool_identifier)
 	print("Methods: %s" % args.tool_method)
 	print("Names.dmp: %s" % args.names_file)
@@ -86,32 +88,38 @@ def main():
 	print("Cutoff: %s" % args.cutoff)
 	print("Bins: %s" % args.bins)
 	print("Reversed: %s" % args.reversed_output)
+	print("Verbose: %s" % args.verbose)
 	print("Detailed: %s" % args.detailed_output)
 	print("Output file: %s" % args.output_file)
 	print("- - - - - - - - - - - - - - - - - - - - -")
+	print()
 
+	print("Parsing taxonomy (names, nodes, merged) ... ")
 	# all_names_scientific, all_names_other -> defaultdict((name,rank): taxid})
 	# nodes -> {taxid:{'parent':taxid,'rank':rank}} **** all nodes.dmp + names.dmp
 	all_names_scientific, all_names_other, nodes, merged = parse_tax(args.names_file, args.nodes_file, args.merged_file, ranks)
-
+	print()
+	
+	print("Reading database profiles ...")
 	# Database profiles
 	D = []
 	dbs_count = defaultdict(int)
 	for database_file in args.database_profiles:
-		db = Databases(database_file, parse_files(database_file, 'db', all_names_scientific, all_names_other, nodes, merged, ranks), ranks)
+		db = Databases(database_file, parse_files(database_file, 'db', all_names_scientific, all_names_other, nodes, merged, ranks, args.verbose), ranks)
 		D.append(db)
 		# dbs_count -> {taxid: count}
 		for taxid in db.getCol('TaxID'): dbs_count[taxid]+=1
-
-	return
+	print()
 	
+	print("Reading profiles ...")
 	# Tools results
 	T = []
 	identifiers = args.tool_identifier.split(",")
 	methods = args.tool_method.split(",")
 	for idx,input_file in enumerate(args.input_files):
-		T.append(Tools(input_file, identifiers[idx], methods[idx], parse_files(input_file, methods[idx], all_names_scientific, all_names_other, nodes, merged, ranks), ranks, D[idx]))
-
+		T.append(Tools(input_file, identifiers[idx], methods[idx], parse_files(input_file, methods[idx], all_names_scientific, all_names_other, nodes, merged, ranks, args.verbose), ranks, args.verbose, D[idx]))
+	print()
+	
 	# Print tool output for plots (before cutoff - only with normalized/estimated abundances - without entries not found in the DB!!)
 	# if args.ground_truth:
 		# for tool in T:
@@ -124,14 +132,16 @@ def main():
 
 	# Filter max results
 	if args.cutoff>1:
-		for tool in T: tool.filterMaxResults(int(args.cutoff))
+		print("Filtering profiles (max. results = %d) ..." % args.cutoff)
+		for tool in T: tool.filterMaxResults(int(args.cutoff), ranks)
+		print()
 	elif args.cutoff>0:
-		for tool in T: tool.filterMinRelativeAbundance(args.cutoff)
-
-	# Repeats due to same name,rank TODO - solve ambiguity
-	for tool in T: tool.filterRepeatedNameRank()
-
+		print("Filtering profiles (min. relative abundance = %f) ..." % args.cutoff)
+		for tool in T: tool.filterMinRelativeAbundance(args.cutoff, ranks)
+		print()
+	
 	# Merged results
+	print("Merging profiles ...")
 	merged = defaultdict(lambda: {'pres':0,'wepres':0,'ab':[]})
 	tool_taxids = np.unique([taxid for tool in T for taxid in tool.getCol('TaxID')])
 	for tool in T:
@@ -205,7 +215,7 @@ def main():
 		print()
 
 	# Add as a tool (+ normalize the abundance)
-	profile_merged_kpres = Tools("", "merged", "p", np.array(profile_merged_kpres), ranks, "")
+	profile_merged_kpres = Tools("", "merged", "p", np.array(profile_merged_kpres), ranks, args.verbose, "")
 
 	# Sort merged results (ascending, based on position)
 	profile_merged_kpres.sort([('Abundance',-1)])

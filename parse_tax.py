@@ -25,10 +25,10 @@ def parse_tax(names_file,nodes_file,merged_file,ranks):
 			nc = fields[3].replace('\t|\n','')
 		
 			if nc=="scientific name":
-				if (name,rank) in all_names_scientific: print("parse_tax WARNING repeated SCIENTIFIC (name,rank)", rank, name, taxid, all_names_scientific[(name,rank)])
+				#if (name,rank) in all_names_scientific: print("(WARNING) repeated scientific name (name,rank)", rank, name, taxid, all_names_scientific[(name,rank)])
 				all_names_scientific[(name,rank)].append(taxid)
 			else:
-				if (name,rank) in all_names_other: print("parse_tax WARNING repeated OTHER (name,rank)", rank, name, taxid, all_names_other[(name,rank)])
+				#if (name,rank) in all_names_other: print("(WARNING) repeated name (name,rank)", rank, name, taxid, all_names_other[(name,rank)])
 				all_names_other[(name,rank)].append(taxid)
 
 			# Set scientific name to taxid (or any other in case is still empty)
