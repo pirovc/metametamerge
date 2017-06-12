@@ -106,6 +106,9 @@ def main():
 	dbs_count = defaultdict(int)
 	for database_file in args.database_profiles:
 		db = Databases(database_file, parse_files(database_file, 'db', all_names_scientific, all_names_other, nodes, merged, ranks, args.verbose), ranks)
+		merged_taxids = db.mergeDuplicatedTaxIDs()
+		if merged_taxids:
+			print("MERGED:", merged_taxids)
 		D.append(db)
 		# dbs_count -> {taxid: count}
 		for taxid in db.getCol('TaxID'): dbs_count[taxid]+=1
@@ -131,59 +134,52 @@ def main():
 			# out.close()
 
 	# Filter max results
-	if args.cutoff>1:
+	if args.cutoff>=1:
+		print("Filtering relative abundances (= 0)")
+		for tool in T: tool.filterMinRelativeAbundance(0, ranks)
+		print()
 		print("Filtering profiles (max. results = %d) ..." % args.cutoff)
 		for tool in T: tool.filterMaxResults(int(args.cutoff), ranks)
 		print()
 	elif args.cutoff>0:
-		print("Filtering profiles (min. relative abundance = %f) ..." % args.cutoff)
+		print("Filtering profiles (min. relative abundance <= %f) ..." % args.cutoff)
 		for tool in T: tool.filterMinRelativeAbundance(args.cutoff, ranks)
 		print()
-	
+	else:
+		print("Filtering relative abundances (= 0)")
+		for tool in T: tool.filterMinRelativeAbundance(0, ranks)
+		print()
+		
 	# Merged results
 	print("Merging profiles ...")
-	merged = defaultdict(lambda: {'pres':0,'wepres':0,'ab':[]})
-	tool_taxids = np.unique([taxid for tool in T for taxid in tool.getCol('TaxID')])
+	merged = defaultdict(lambda: {'Presence':0,'Score':0,'Abundance':[]})
 	for tool in T:
-		tool.sort([('Abundance',-1)])
 		for rankid,profilerank in tool:
 			for pr in profilerank:
-				# Only if has real abundance
-				if pr['Abundance']==0:
-					print("metametamerge WARNING zero abundance ", ranks.getRankName(rankid), nodes[taxid]['name'], tool.ident)
-				else:
-					taxid = pr['TaxID']
-					if taxid in tool_taxids:
-						# Presence
-						merged[(taxid,rankid)]['pres'] += 1
+				taxid = pr['TaxID']
+				merged[(taxid,rankid)]['Presence'] += 1
+				merged[(taxid,rankid)]['Score'] = ((merged[(taxid,rankid)]['Presence']+1)**2)/float(dbs_count[taxid])
+				merged[(taxid,rankid)]['Abundance'].append(pr['Abundance'])
 
-						# # Weighted presence
-						if taxid not in dbs_count:
-							print("metametamerge ERROR entry not found in dbs_count ", ranks.getRankName(rankid), nodes[taxid]['name'], tool.ident)
-							merged[(taxid,rankid)]['wepres'] = 0.5
-						else:
-							if merged[(taxid,rankid)]['pres'] > dbs_count[taxid]:
-								merged[(taxid,rankid)]['wepres'] = ((dbs_count[taxid]+1)**2)/float(dbs_count[taxid])
-								print("metametamerge ERROR more ident. than db elemnts ", nodes[taxid]['name'])
-							else:
-								merged[(taxid,rankid)]['wepres'] = ((merged[(taxid,rankid)]['pres']+1)**2)/float(dbs_count[taxid])
 
-						# Abundances
-						merged[(taxid,rankid)]['ab'].append(pr['Abundance'])
-						
-	pres = [val['wepres'] for (taxid,rankid),val in list(merged.items())]
+	# List of scores
+	scores = [val['Score'] for (taxid,rankid),val in list(merged.items())]
+
+	# Divide scores range into bin groups 
+	_, bin_edges = np.histogram(scores, bins=args.bins, range=(0,np.max(scores)))
+
+	# Create an Profile, setting the bin number according to the edges and taking harmonic mean out of the abundances
 	profile_merged = []
-	bin_size = args.bins
-	_, bin_edges = np.histogram(pres, bins=bin_size, range=(0,np.max(pres)))
-
 	for (taxid,rankid),val in list(merged.items()):
-		profile_merged.append([np.digitize([val['wepres']],bin_edges,right=True)[0],rankid,taxid,hmean(val['ab'])])
-
+		profile_merged.append([np.digitize([val['Score']],bin_edges,right=True)[0],rankid,taxid,hmean(val['Abundance'])])
 	profile_merged = Profile(np.array(profile_merged),ranks)
-
+	
 	#Sort by desc. presence and desc. abundance
 	profile_merged.sort([('Abundance',-1),('Presence',-1)])
-
+	print()
+	
+	return
+	print("Aplying guided cutoff ...")
 	# Apply cutoff based on the k presence (mode)
 	profile_merged_kpres = []
 	mode = {}
