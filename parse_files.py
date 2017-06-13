@@ -172,7 +172,7 @@ def parse_files(input_file, method, all_names_scientific, all_names_other, nodes
 		for rank in ranks.ranks: 
 			tot+=count[rank]['total']
 			ign+=count[rank]['ignored']
-			print(("\t%s - %d entries (%d ignored)") % (rank, count[rank]['total']-count[rank]['ignored'],count[rank]['ignored']))
+			print(("\t%s - %d entries (%d ignored)") % (rank, count[rank]['total'],count[rank]['ignored']))
 		print(("\tTotal - %d taxons (%d ignored)") % (tot,ign))
 	elif method=='b':
 		if isbioboxes(input_file):

@@ -58,7 +58,7 @@ def main():
 
 	parser.add_argument('-b', metavar='<bins>', dest="bins", type=int, default=4,  help="Number of bins. Default: 4")
 	parser.add_argument('-r', metavar='<cutoff>', dest="cutoff", type=float, default=0.0001, help="Minimum abundance/Maximum results for each taxonomic level (0: off / 0-1: minimum relative abundance / >=1: maximum number of identifications). Default: 0.0001") 	
-	parser.add_argument('-f', metavar='<mode>', dest="mode", type=str, default="linear",  help="Result mode (precise, very-precise, linear, sensitive, very-sensitive). Default: linear")
+	parser.add_argument('-f', metavar='<mode>', dest="mode", type=str, default="linear",  help="Result mode (precise, very-precise, linear, sensitive, very-sensitive, no-cutoff). Default: linear")
 	parser.add_argument('-s', metavar='<reversed_output>', dest="reversed_output", default=1, type=int, help="Consider only species level identifications and estimate upper taxonomic level identifications from it (0/1). Default: 1")
 	
 	parser.add_argument('--verbose', action='store_true')
@@ -71,6 +71,7 @@ def main():
 	args = parser.parse_args()
 
 	ranks = Ranks(['superkingdom','phylum','class','order','family','genus','species'])
+	#ranks = Ranks(['species'])
 	output_folder = os.path.dirname(args.output_file)
 
 	print("- - - - - - - - - - - - - - - - - - - - -")
@@ -106,21 +107,20 @@ def main():
 	dbs_count = defaultdict(int)
 	for database_file in args.database_profiles:
 		db = Databases(database_file, parse_files(database_file, 'db', all_names_scientific, all_names_other, nodes, merged, ranks, args.verbose), ranks)
-		merged_taxids = db.mergeDuplicatedTaxIDs()
-		if merged_taxids:
-			print("MERGED:", merged_taxids)
 		D.append(db)
 		# dbs_count -> {taxid: count}
 		for taxid in db.getCol('TaxID'): dbs_count[taxid]+=1
 	print()
 	
+
 	print("Reading profiles ...")
 	# Tools results
 	T = []
 	identifiers = args.tool_identifier.split(",")
 	methods = args.tool_method.split(",")
 	for idx,input_file in enumerate(args.input_files):
-		T.append(Tools(input_file, identifiers[idx], methods[idx], parse_files(input_file, methods[idx], all_names_scientific, all_names_other, nodes, merged, ranks, args.verbose), ranks, args.verbose, D[idx]))
+		tool = Tools(input_file, identifiers[idx], methods[idx], parse_files(input_file, methods[idx], all_names_scientific, all_names_other, nodes, merged, ranks, args.verbose), ranks, args.verbose, D[idx])
+		T.append(tool)
 	print()
 	
 	# Print tool output for plots (before cutoff - only with normalized/estimated abundances - without entries not found in the DB!!)
@@ -157,65 +157,73 @@ def main():
 		for rankid,profilerank in tool:
 			for pr in profilerank:
 				taxid = pr['TaxID']
-				merged[(taxid,rankid)]['Presence'] += 1
-				merged[(taxid,rankid)]['Score'] = ((merged[(taxid,rankid)]['Presence']+1)**2)/float(dbs_count[taxid])
+				merged[(taxid,rankid)]['Presence'] += 1 # Counting pr['TaxID'] would be duplicated for merged
+				merged[(taxid,rankid)]['Score'] = ((merged[(taxid,rankid)]['Presence']+1)**2)/float(dbs_count[taxid]+1)
 				merged[(taxid,rankid)]['Abundance'].append(pr['Abundance'])
-
-
+	
 	# List of scores
 	scores = [val['Score'] for (taxid,rankid),val in list(merged.items())]
-
 	# Divide scores range into bin groups 
-	_, bin_edges = np.histogram(scores, bins=args.bins, range=(0,np.max(scores)))
-
-	# Create an Profile, setting the bin number according to the edges and taking harmonic mean out of the abundances
+	_, bin_edges = np.histogram(scores, bins=args.bins, range=(0,len(T)+1))
+	
+	# Create an Profile, setting the bin number (1...args.bins) according to the edges and taking harmonic mean out of the abundances
 	profile_merged = []
 	for (taxid,rankid),val in list(merged.items()):
 		profile_merged.append([np.digitize([val['Score']],bin_edges,right=True)[0],rankid,taxid,hmean(val['Abundance'])])
 	profile_merged = Profile(np.array(profile_merged),ranks)
-	
+
 	#Sort by desc. presence and desc. abundance
 	profile_merged.sort([('Abundance',-1),('Presence',-1)])
+	
+	for rankid,profilerank in profile_merged:
+		print(("\t%s - %d entries") % (ranks.getRankName(rankid),profilerank.getSize()))
 	print()
 	
-	return
 	print("Aplying guided cutoff ...")
-	# Apply cutoff based on the k presence (mode)
-	profile_merged_kpres = []
+	# Apply guided cutoff based on pre-defined functions (mode)
+	profile_merged_mode = []
 	mode = {}
-	max_pres = np.max(profile_merged.getCol('Presence'))
+	bin_n = len(bin_edges)-1 #args.bins
 	for rankid,profilerank in profile_merged:
-		for p in sorted(np.unique(profile_merged.getCol('Presence'))):
-			# Organisms in the rank and n. of presence
-			subset_pres = profilerank.getSubSet(profilerank.getCol('Presence')==p)
-			x = subset_pres.getSize()
-
+		print("\t%s" % ranks.getRankName(rankid))
+		for bin in range(1,bin_n+1):
+			profile_bin = profilerank.getSubSet(profilerank.getCol('Presence')==bin)
+			bin_c = profile_bin.getSize()
+			
 			if args.mode=="linear": #lin
-				mode[(rankid, p)] = (x, p / float(max_pres))
+				mode[(rankid, bin)] = (bin_c, bin / float(bin_n))
 			elif args.mode=="very-sensitive": #log_max
-				mode[(rankid, p)] = (x, np.log(p + 3) / float(np.log(max_pres + 3)))
+				mode[(rankid, bin)] = (bin_c, np.log(bin + 3) / float(np.log(bin_n + 3)))
 			elif args.mode=="sensitive": #log
-				mode[(rankid, p)] = (x, np.log(p + 1) / float(np.log(max_pres + 1)))
+				mode[(rankid, bin)] = (bin_c, np.log(bin + 1) / float(np.log(bin_n + 1)))
 			elif args.mode=="very-precise": #exp_max
-				mode[(rankid, p)] = (x, (4 ** p) / float(4 ** max_pres))
+				mode[(rankid, bin)] = (bin_c, (4 ** bin) / float(4 ** bin_n))
 			elif args.mode=="precise": #exp
-				mode[(rankid, p)] = (x, (2 ** p) / float(2 ** max_pres))
+				mode[(rankid, bin)] = (bin_c, (2 ** bin) / float(2 ** bin_n))
+			elif args.mode=="no-cutoff": #do not apply cut-off, just merge results
+				mode[(rankid, bin)] = (bin_c, 1) 
 
-			#mode[(rankid,p)] = (x,1) # NO CUTOFF
-			#mode[(rankid,p)] = (x,1) if p==3 else (x,0)
-			print("Rank: %s \t Presence: %s \t N.Orgs: %d \t Cutoff: %d (%.2f%%) " % (ranks.getRankName(rankid), p, x, mode[(rankid,p)][0]*mode[(rankid,p)][1], mode[(rankid,p)][1]*100))
-			# For each subset selected
-			if x:
-				for pr in subset_pres.getRow(0,int(mode[(rankid,p)][0]*mode[(rankid,p)][1])):
-					profile_merged_kpres.append([pr['Presence'],rankid,pr['TaxID'],pr['Abundance']])
-		print()
-
+			print("\tbin: %d \t # taxons: %d (%d kept - %.2f%%) " % (bin, bin_c, mode[(rankid,bin)][0]*mode[(rankid,bin)][1], mode[(rankid,bin)][1]*100))
+				
+			if bin_c:
+				# Add entry only for taxons above the cutoff
+				for pr in profile_bin.getRow(0,int(mode[(rankid,bin)][0]*mode[(rankid,bin)][1])):
+					profile_merged_mode.append([pr['Presence'],rankid,pr['TaxID'],pr['Abundance']])
+				
 	# Add as a tool (+ normalize the abundance)
-	profile_merged_kpres = Tools("", "merged", "p", np.array(profile_merged_kpres), ranks, args.verbose, "")
+	profile_merged_mode = Tools("", "merged", "p", np.array(profile_merged_mode), ranks, args.verbose, "")
 
 	# Sort merged results (ascending, based on position)
-	profile_merged_kpres.sort([('Abundance',-1)])
+	profile_merged_mode.sort([('Abundance',-1)])
+	
+	print()
+	print("Final merged profile:")
+	for rankid,profilerank in profile_merged_mode:
+		print(("\t%s - %d entries") % (ranks.getRankName(rankid),profilerank.getSize()))
+	print()
+	
 
+	
 	# Print merged results
 	out = open(args.output_file,'w')
 	if args.detailed_output:
@@ -241,7 +249,7 @@ def main():
 	if args.reversed_output:
 		### GENERATE LOWER RANKS FROM SPECIES
 		reversed_ranks = defaultdict(lambda: {'Abundance':0,'Rank':''})
-		for pr in profile_merged_kpres.profilerank[ranks.getRankID("species")]:
+		for pr in profile_merged_mode.profilerank[ranks.getRankID("species")]:
 			txid = pr['TaxID']
 			while txid!=1:
 				if nodes[txid]['rank'] in ranks.ranks:
@@ -256,7 +264,7 @@ def main():
 					if args.detailed_output: print_details(out_detailed,txid)
 						
 	else:
-		for rankid, profilerank in profile_merged_kpres:
+		for rankid, profilerank in profile_merged_mode:
 			for pr in profilerank:
 				out.write("%s\t%s\t%.16f\n" % (ranks.getRankName(rankid),nodes[pr['TaxID']]['name'],pr['Abundance']))
 				if args.detailed_output: print_details(out_detailed,pr['TaxID'])
@@ -267,7 +275,7 @@ def main():
 	#### PLOTS
 	# if args.ground_truth:
 		# import plots_dev
-		# plots_dev.plots(T,all_names_scientific, all_names_other, nodes, profile_merged, profile_merged_kpres,mode,args.ground_truth,ranks,args.output_file)
+		# plots_dev.plots(T,all_names_scientific, all_names_other, nodes, profile_merged, profile_merged_mode,mode,args.ground_truth,ranks,args.output_file)
     #### PLOTS
 if __name__ == "__main__":
 	main()

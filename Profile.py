@@ -41,10 +41,10 @@ class Profile:
 		for profilerank in list(self.profilerank.values()):
 			profilerank.sort(cols)
 
-	def mergeDuplicatedTaxIDs(self):
+	def mergeRepeatedTaxIDs(self):
 		merged_taxids = []
 		for profilerank in list(self.profilerank.values()):
-			profilerank.mergeDuplicatedTaxIDs()
+			profilerank.mergeRepeatedTaxIDs()
 			merged_taxids.extend(profilerank.getSubSet(profilerank.getCol('Presence')>1).getCol('TaxID'))
 		return merged_taxids
 			
@@ -81,21 +81,19 @@ class ProfileRank:
 		sort_idx = np.lexsort(ord)
 		self.profilerank = self.profilerank[sort_idx]
 	
-	def mergeDuplicatedTaxIDs(self):
-		self.sort([('TaxID',1)])
-		pr = self.profilerank[:,0]
-		tx = self.profilerank[:,1]
-		ab = self.profilerank[:,2]
-		pr.cumsum(out=pr)
-		ab.cumsum(out=ab)
-		index = np.empty(len(tx), 'bool')
-		index[:-1] = tx[1:] != tx[:-1]
-		pr = pr[index]
-		tx = tx[index]
-		ab = ab[index]
-		ab[1:] = ab[1:] - ab[:-1]
-		pr[1:] = pr[1:] - pr[:-1]
-		self.profilerank = np.stack((pr,tx,ab), axis=-1)
+	def mergeRepeatedTaxIDs(self):
+		values, counts = np.unique(self.getCol('TaxID'), return_counts=True)
+		repeated_taxids = values[counts>1]
+		if repeated_taxids.any():
+			merged_entries = []
+			# Use field 'Presence' to account for repeated entries
+			for rt in repeated_taxids:
+				sub_rt = self.getSubSet(self.getCol('TaxID')==rt)
+				merged_entries.append([np.sum(sub_rt.getCol('Presence')),rt,np.sum(sub_rt.getCol('Abundance'))])
+			# Remove repeated
+			self.profilerank = self.profilerank[~np.in1d(self.getCol('TaxID'),repeated_taxids)]
+			# Add merged
+			self.profilerank = np.vstack([self.profilerank, merged_entries])
 		
 		
 		

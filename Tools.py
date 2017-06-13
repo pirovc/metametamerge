@@ -29,21 +29,14 @@ class Tools(Profile):
 			# Filter them out
 			profilerank.filter(taxids_in_db)
 			
-	def estimateAbundance(self,db, verbose): 
+	def estimateAbundance(self, db, verbose): 
 		for profilerank in list(self.profilerank.values()): 
 			for pr in profilerank:
 				taxid = pr['TaxID']
-				old_ab = pr['Abundance']
-				db_taxid = db.getSubSet('TaxID',pr['TaxID'])
-
-				if verbose:
-					if db_taxid.getSize()>1: print(("(WARNING) merged entry on db [%d]") % taxid)
-						
-				# Sum in case of multiple occurences of taxids in database (when nodes were merged)
-				taxid_db_len = np.sum(db_taxid.getCol('Abundance'))
-				new_ab = old_ab/float(taxid_db_len)
-
-				profilerank.profilerank[profilerank.getCol('TaxID')==pr['TaxID'],profilerank.cols['Abundance']] = new_ab
+				# Get db length for taxid (unique after mergeRepeatedTaxIDs)
+				db_len = db.getSubSet('TaxID',taxid).getCol('Abundance')[0]
+				new_ab = pr['Abundance']/float(db_len)
+				profilerank.profilerank[profilerank.getCol('TaxID')==taxid,profilerank.cols['Abundance']] = new_ab
 			
 	def normalizeAbundance(self): 
 		for profilerank in list(self.profilerank.values()): 
