@@ -59,7 +59,7 @@ def main():
 	parser.add_argument('-b', metavar='<bins>', dest="bins", type=int, default=4,  help="Number of bins. Default: 4")
 	parser.add_argument('-r', metavar='<cutoff>', dest="cutoff", type=float, default=0.0001, help="Minimum abundance/Maximum results for each taxonomic level (0: off / 0-1: minimum relative abundance / >=1: maximum number of identifications). Default: 0.0001") 	
 	parser.add_argument('-f', metavar='<mode>', dest="mode", type=str, default="linear",  help="Result mode (precise, very-precise, linear, sensitive, very-sensitive, no-cutoff). Default: linear")
-	parser.add_argument('-s', metavar='<reversed_output>', dest="reversed_output", default=1, type=int, help="Consider only species level identifications and estimate upper taxonomic level identifications from it (0/1). Default: 1")
+	parser.add_argument('-s', metavar='<ranks>', dest="ranks", default="species", type=str, help="Consider only the specified taxonomic ranks (comma separated) and estimate upper taxonomic levels from it. Supressing this  option will merge every rank independently for every tool. (superkingdom, phylum , class, order, family, genus, species, off). Default: species")
 	
 	parser.add_argument('--verbose', action='store_true')
 	parser.add_argument('-l', metavar='<detailed_output>', dest="detailed_output", default=0, type=int, help="Generate an additional detailed output (0/1). Default: 0")
@@ -67,28 +67,27 @@ def main():
 	
 	parser.add_argument('-v', action='version', version='%(prog)s ' + version)
 	
-	#parser.add_argument('-g', metavar='<ground_truth>', type=str, dest="ground_truth")
 	args = parser.parse_args()
 
-	ranks = Ranks(['superkingdom','phylum','class','order','family','genus','species'])
-	#ranks = Ranks(['species'])
+	all_ranks = Ranks(['superkingdom','phylum','class','order','family','genus','species'])
+	if args.ranks:
+		ranks = Ranks([r.strip() for r in args.ranks.split(",")])
+	else:
+		ranks = all_ranks
+
 	output_folder = os.path.dirname(args.output_file)
 
 	print("- - - - - - - - - - - - - - - - - - - - -")
 	print("           MetaMetaMerge %s" % version)
 	print("- - - - - - - - - - - - - - - - - - - - -")
-	print("Ranks: %s" % ', '.join(ranks.ranks))
-	print("Input files: %s" % ', '.join(args.input_files))
-	print("Database profiles: %s" % ', '.join(args.database_profiles))
-	print("Identifiers: %s" % args.tool_identifier)
-	print("Methods: %s" % args.tool_method)
-	print("Names.dmp: %s" % args.names_file)
-	print("Nodes.dmp: %s" % args.nodes_file)
-	print("Merged.dmp: %s" % args.merged_file)
+	print("Input files: ")
+	for i,file in enumerate(args.input_files):
+		print((" %s (%s) %s %s") % (args.tool_identifier.split(",")[i],args.tool_method.split(",")[i],file,args.database_profiles[i]))
+	print("Taxonomy: \n %s, %s, %s" % (args.names_file,args.nodes_file,args.merged_file))
 	print("Mode: %s" % args.mode)
 	print("Cutoff: %s" % args.cutoff)
 	print("Bins: %s" % args.bins)
-	print("Reversed: %s" % args.reversed_output)
+	print("Ranks: %s" % ', '.join(ranks.ranks))
 	print("Verbose: %s" % args.verbose)
 	print("Detailed: %s" % args.detailed_output)
 	print("Output file: %s" % args.output_file)
@@ -246,18 +245,18 @@ def main():
 					od.write("-1\t")
 		od.write("\n")
 		
-	if args.reversed_output:
+	if args.ranks:
 		### GENERATE LOWER RANKS FROM SPECIES
 		reversed_ranks = defaultdict(lambda: {'Abundance':0,'Rank':''})
 		for pr in profile_merged_mode.profilerank[ranks.getRankID("species")]:
 			txid = pr['TaxID']
 			while txid!=1:
-				if nodes[txid]['rank'] in ranks.ranks:
+				if nodes[txid]['rank'] in all_ranks.ranks:
 					reversed_ranks[txid]['Abundance']+=pr['Abundance']
 					reversed_ranks[txid]['Rank']=nodes[txid]['rank']
 				txid = nodes[txid]['parent']
 		
-		for r in ranks.ranks: #workaround for output sorted
+		for r in all_ranks.ranks: #workaround for output sorted
 			for txid, rp in list(reversed_ranks.items()):
 				if rp['Rank']==r:
 					out.write("%s\t%s\t%.16f\n" % (rp['Rank'],nodes[txid]['name'],rp['Abundance']))	
