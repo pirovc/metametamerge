@@ -13,14 +13,14 @@ def parse_files(input_file, method, all_names_scientific, all_names_other, nodes
  		
 		# Verify if rank is valid -> only on profiling (binning is kept to account for the abundance estimation)
 		if rank not in ranks.ranks and method=='p': 
-			if verbose: print(("Ignored entry [%s] rank [%s] - Rank not expected" % (taxid,rank)))
+			if verbose: print(("Ignored entry [%s] rank [%s] - Rank not expected" % (taxid if taxid else name,rank)))
 			return 0
 		
 		if taxid:
 			if taxid in nodes: # Valid taxid
 				return taxid
 			elif taxid in merged: # Search for updated taxid on merged.dmp
-				if verbose: print(("(WARNING) merged taxid [%d] rank [%s] -> [%d] rank [%s]") % (taxid, rank, merged[taxid], nodes[merged[taxid]]['rank']))
+				if verbose: print(("(WARNING) merged taxid [%d] -> [%d] rank [%s]") % (taxid, merged[taxid], nodes[merged[taxid]]['rank']))
 				# If found on merged.dmp, verify if rank is valid
 				if nodes[merged[taxid]]['rank'] not in ranks.ranks and method=='p':  
 					if verbose: print(("Ignored entry [%s] rank [%s] - Rank not expected" % (taxid,rank)))
@@ -173,7 +173,9 @@ def parse_files(input_file, method, all_names_scientific, all_names_other, nodes
 			tot+=count[rank]['total']
 			ign+=count[rank]['ignored']
 			print(("\t%s - %d entries (%d ignored)") % (rank, count[rank]['total'],count[rank]['ignored']))
-		print(("\tTotal - %d taxons (%d ignored)") % (tot,ign))
+			# Just warn user because lack of a rank can happen (when lineage is not well described)
+			if count[rank]['total']-count[rank]['ignored']==0: print(("\t(WARNING) no valid entries found [%s]") % (rank))
+
 	elif method=='b':
 		if isbioboxes(input_file):
 			print(" - %s (BioBoxes)" % input_file)
@@ -188,7 +190,7 @@ def parse_files(input_file, method, all_names_scientific, all_names_other, nodes
 		for rank in ranks.ranks: 
 			tot+=count2[rank]
 			print(("\t%s - %d entries") % (rank, count2[rank]))
-		print(("\tTotal - %d taxons") % (tot))
+			if count2[rank]==0: print(("\t(WARNING) no valid entries found [%s]") % (rank))
 
 	#r = [Presence,RankID,TaxID,Val]
 	return np.array(r)

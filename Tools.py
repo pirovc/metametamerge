@@ -4,16 +4,11 @@ import numpy as np
 
 class Tools(Profile):
 		
-	def __init__(self, file, ident, method, profile, ranks, verbose, db=None):	
+	def __init__(self, file, ident, method, profile, ranks, verbose):	
 		self.file = file
 		self.ident = ident
 		self.method = method
 		Profile.__init__(self, profile, ranks)
-		if db: 
-			#check presence on it's on database profile
-			self.checkDB(db, ranks, verbose)
-			# Estimate abundance for binning methods
-			if self.method=='b': self.estimateAbundance(db, verbose)
 		# Normalize abundance for all
 		self.normalizeAbundance()
 
