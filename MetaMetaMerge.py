@@ -105,10 +105,12 @@ def main():
 	dbs_count = defaultdict(int)
 	for database_file in args.database_profiles:
 		db = Databases(database_file, parse_files(database_file, 'db', all_names_scientific, all_names_other, nodes, merged, ranks, args.verbose), ranks)		
+		
 		# Merge repeated taxids (when taxid changes in the new taxonomy version)
 		merged_taxids = db.mergeRepeatedTaxIDs()
 		if merged_taxids: print(("\t%d taxons with merged entries [%s]") % (len(merged_taxids),",".join([str(int(taxid)) for taxid in merged_taxids])))
 		print(("\tTotal - %d taxons") % (db.getSize()))
+		
 		D.append(db)
 		# dbs_count -> {taxid: count}
 		for taxid in db.getCol('TaxID'): dbs_count[taxid]+=1
@@ -132,18 +134,20 @@ def main():
 		# Estimate abundance for binning methods
 		if methods[idx]=='b': tool.estimateAbundance(D[idx], args.verbose)
 		
+		# Normalize abundance
+		tool.normalizeAbundance()
+		
 		print(("\tTotal - %d taxons") % (tool.getSize()))
 		T.append(tool)
 
-	# Print tool output for plots (before cutoff - only with normalized/estimated abundances - without entries not found in the DB!!)
-	# if args.ground_truth:
-		# for tool in T:
-			# out = open(output_folder + "/metameta_" + tool.ident + ".out",'w')
-			# tool.sort([('Abundance',-1)])
-			# for rankid, profilerank in tool:
-				# for pr in profilerank:
-					# out.write("%s\t%s\t%.16f\n" % (ranks.getRankName(rankid),int(pr['TaxID']),pr['Abundance']))
-			# out.close()
+	#Print tool output for plots (before cutoff - only with normalized/estimated abundances - without entries not found in the DB!!)
+	# for tool in T:
+		# out = open(output_folder + "/metameta_" + tool.ident + ".out",'w')
+		# tool.sort([('Abundance',-1)])
+		# for rankid, profilerank in tool:
+			# for pr in profilerank:
+				# out.write("%s\t%s\t%.16f\n" % (ranks.getRankName(rankid),int(pr['TaxID']),pr['Abundance']))
+		# out.close()
 
 	# Filter max results
 	print()
@@ -224,6 +228,7 @@ def main():
 	
 	# Add as a tool (+ normalize the abundance)
 	profile_merged_mode = Tools("", "merged", "p", np.array(profile_merged_mode), ranks, args.verbose)
+	profile_merged_mode.normalizeAbundance()
 	
 	# If only a subset of ranks were analyzed, estimate missing ranks
 	if ranks.ranks!=all_ranks.ranks:
@@ -254,7 +259,8 @@ def main():
 		
 		# Add as a tool (+ normalize the abundance)
 		profile_merged_mode = Tools("", "merged", "p", np.array(profile_estimated), all_ranks, args.verbose)
-	
+		profile_merged_mode.normalizeAbundance()
+		
 	# Sort merged results (ascending, based on position)
 	profile_merged_mode.sort([('Abundance',-1)])
 	print()
@@ -267,7 +273,7 @@ def main():
 	if args.output_type=="tsv":
 		for rankid, profilerank in profile_merged_mode:
 			for pr in profilerank:
-				out.write("%s\t%s\t%.16f\n" % (all_ranks.getRankName(rankid),nodes[pr['TaxID']]['name'],pr['Abundance']))	
+				out.write("%s\t%d\t%.16f\n" % (all_ranks.getRankName(rankid),pr['TaxID'],pr['Abundance']))	
 	else: #bioboxes
 		out.write("# Taxonomic Profiling Output\n")
 		out.write("@SampleID:%s\n" % args.output_file)

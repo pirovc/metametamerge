@@ -9,8 +9,6 @@ class Tools(Profile):
 		self.ident = ident
 		self.method = method
 		Profile.__init__(self, profile, ranks)
-		# Normalize abundance for all
-		self.normalizeAbundance()
 
 	def checkDB(self, db, ranks, verbose):
 		db_taxids = db.getCol('TaxID')
