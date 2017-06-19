@@ -142,7 +142,7 @@ def main():
 
 	#Print tool output for plots (before cutoff - only with normalized/estimated abundances - without entries not found in the DB!!)
 	# for tool in T:
-		# out = open(output_folder + "/metameta_" + tool.ident + ".out",'w')
+		# out = open(output_folder + "/../metameta_" + tool.ident + ".out",'w')
 		# tool.sort([('Abundance',-1)])
 		# for rankid, profilerank in tool:
 			# for pr in profilerank:
@@ -261,6 +261,8 @@ def main():
 		profile_merged_mode = Tools("", "merged", "p", np.array(profile_estimated), all_ranks, args.verbose)
 		profile_merged_mode.normalizeAbundance()
 		
+	## ** for here on reference all_ranks instead of ranks
+	
 	# Sort merged results (ascending, based on position)
 	profile_merged_mode.sort([('Abundance',-1)])
 	print()
