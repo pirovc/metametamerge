@@ -61,6 +61,7 @@ def main():
 	
 	parser.add_argument('-o', '--output-file', metavar='<output_file>', dest="output_file", type=str, required=True, help="Output file")
 	parser.add_argument('-p', '--output-type', metavar='<output_type>', dest="output_type", default="bioboxes", type=str, help="Output type (tsv, bioboxes). Default: bioboxes")
+	parser.add_argument('--output-parsed-profiles', action='store_true', dest="output_parsed_profiles", help="Output parsed and converted profiles for all input files (without cutoff)")
 	parser.add_argument('--detailed', action='store_true', dest="detailed", help="Generate an additional detailed output with individual normalized abundances for each tool, where: 0 -> not identified but present in the database, -1 not present in the database.")
 	parser.add_argument('--verbose', action='store_true', dest="verbose", help="Verbose output log")
 	
@@ -141,13 +142,9 @@ def main():
 		T.append(tool)
 
 	#Print tool output for plots (before cutoff - only with normalized/estimated abundances - without entries not found in the DB!!)
-	# for tool in T:
-		# out = open(output_folder + "/../metameta_" + tool.ident + ".out",'w')
-		# tool.sort([('Abundance',-1)])
-		# for rankid, profilerank in tool:
-			# for pr in profilerank:
-				# out.write("%s\t%s\t%.16f\n" % (ranks.getRankName(rankid),int(pr['TaxID']),pr['Abundance']))
-		# out.close()
+	if args.output_parsed_profiles:
+		for tool in T:
+			print_bioboxes(output_folder + tool.ident + ".parsed_profile.out",args.nodes_file,tool,nodes,ranks)
 
 	# Filter max results
 	print()
@@ -271,40 +268,15 @@ def main():
 		print(("\t%s - %d entries") % (all_ranks.getRankName(rankid),profilerank.getSize()))
 
 	# Print final merged profile
-	out = open(args.output_file,'w')
 	if args.output_type=="tsv":
+		out = open(args.output_file,'w')
 		for rankid, profilerank in profile_merged_mode:
 			for pr in profilerank:
 				out.write("%s\t%d\t%.16f\n" % (all_ranks.getRankName(rankid),pr['TaxID'],pr['Abundance']))	
+		out.close()
 	else: #bioboxes
-		out.write("# Taxonomic Profiling Output\n")
-		out.write("@SampleID:%s\n" % args.output_file)
-		out.write("@Version:0.9.3\n")
-		out.write("@Ranks:%s\n" % '|'.join(all_ranks.ranks))
-		out.write("@TaxonomyID:%s\n" % args.nodes_file)
-		out.write("@@TAXID\tRANK\tTAXPATH\tTAXPATHSN\tPERCENTAGE\n")
-		for rankid, profilerank in profile_merged_mode:
-			for pr in profilerank:
-				lineage = defaultdict(int)
-				txid = int(pr['TaxID'])
-				while txid!=1:
-					lineage[nodes[txid]['rank']] = txid
-					txid = nodes[txid]['parent']
-				name_lineage = []
-				taxid_lineage = []
-				for r in all_ranks.ranks[0:rankid+1]:
-					name_lineage.append(nodes[lineage[r]]['name'] if lineage[r] else "")
-					taxid_lineage.append(str(lineage[r]) if lineage[r] else "")
-				txid = int(pr['TaxID'])
-				out.write(("%d\t%s\t%s\t%s\t%.6f\n" % (
-						txid, 
-						nodes[txid]['rank'],
-						"|".join(taxid_lineage),
-						"|".join(name_lineage),
-						pr['Abundance']
-						)))
-	out.close()
-
+		print_bioboxes(args.output_file,args.nodes_file,profile_merged_mode,nodes,all_ranks)
+	
 	# Print detailed profile
 	if args.detailed:
 		out_detailed = open(args.output_file + ".detailed",'w')
@@ -327,5 +299,34 @@ def main():
 				out_detailed.write("\n")
 		out_detailed.close()
 
+def print_bioboxes(output_file,nodes_file,profile_merged_mode,nodes,ranks):
+	out = open(output_file,'w')
+	out.write("# Taxonomic Profiling Output\n")
+	out.write("@SampleID:%s\n" % output_file)
+	out.write("@Version:0.9.3\n")
+	out.write("@Ranks:%s\n" % '|'.join(ranks.ranks))
+	out.write("@TaxonomyID:%s\n" % nodes_file)
+	out.write("@@TAXID\tRANK\tTAXPATH\tTAXPATHSN\tPERCENTAGE\n")
+	for rankid, profilerank in profile_merged_mode:
+		for pr in profilerank:
+			lineage = defaultdict(int)
+			txid = int(pr['TaxID'])
+			while txid!=1:
+				lineage[nodes[txid]['rank']] = txid
+				txid = nodes[txid]['parent']
+			name_lineage = []
+			taxid_lineage = []
+			for r in ranks.ranks[0:rankid+1]:
+				name_lineage.append(nodes[lineage[r]]['name'] if lineage[r] else "")
+				taxid_lineage.append(str(lineage[r]) if lineage[r] else "")
+			txid = int(pr['TaxID'])
+			out.write(("%d\t%s\t%s\t%s\t%.6f\n" % (
+					txid, 
+					nodes[txid]['rank'],
+					"|".join(taxid_lineage),
+					"|".join(name_lineage),
+					pr['Abundance']
+					)))
+	out.close()
 if __name__ == "__main__":
 	main()
