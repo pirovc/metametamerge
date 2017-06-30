@@ -71,11 +71,16 @@ def main():
 
 	all_ranks = Ranks(['superkingdom','phylum','class','order','family','genus','species'])
 	if args.ranks and args.ranks!="all":
-		ranks = Ranks([r.strip() for r in args.ranks.split(",")])
+		for r in args.ranks.split(","):
+			if r.strip() not in all_ranks.ranks:
+				print("Rank [%s] not supported - Avaiable ranks: %s" % (r.strip(), all_ranks.ranks))
+				return 1
+		# Sort input based on all ranks
+		ranks = Ranks(sorted([r.strip() for r in args.ranks.split(",")], key=lambda x: all_ranks.ranks.index(x)))
 	else:
 		ranks = all_ranks
-
-	output_folder = os.path.dirname(args.output_file)
+	
+	output_folder = os.path.dirname(args.output_file) + "/"
 
 	print("- - - - - - - - - - - - - - - - - - - - -")
 	print("           MetaMetaMerge %s" % version)
@@ -144,7 +149,7 @@ def main():
 	#Print tool output for plots (before cutoff - only with normalized/estimated abundances - without entries not found in the DB!!)
 	if args.output_parsed_profiles:
 		for tool in T:
-			print_bioboxes(output_folder + tool.ident + ".parsed_profile.out",args.nodes_file,tool,nodes,ranks)
+			print_bioboxes(output_folder + tool.ident + ".parsed_profile.out",args.nodes_file,tool,nodes,ranks,all_ranks)
 
 	# Filter max results
 	print()
@@ -275,7 +280,7 @@ def main():
 				out.write("%s\t%d\t%.16f\n" % (all_ranks.getRankName(rankid),pr['TaxID'],pr['Abundance']))	
 		out.close()
 	else: #bioboxes
-		print_bioboxes(args.output_file,args.nodes_file,profile_merged_mode,nodes,all_ranks)
+		print_bioboxes(args.output_file,args.nodes_file,profile_merged_mode,nodes,all_ranks,all_ranks)
 	
 	# Print detailed profile
 	if args.detailed:
@@ -299,7 +304,7 @@ def main():
 				out_detailed.write("\n")
 		out_detailed.close()
 
-def print_bioboxes(output_file,nodes_file,profile_merged_mode,nodes,ranks):
+def print_bioboxes(output_file,nodes_file,profile_merged_mode,nodes,ranks,all_ranks):
 	out = open(output_file,'w')
 	out.write("# Taxonomic Profiling Output\n")
 	out.write("@SampleID:%s\n" % output_file)
@@ -316,7 +321,8 @@ def print_bioboxes(output_file,nodes_file,profile_merged_mode,nodes,ranks):
 				txid = nodes[txid]['parent']
 			name_lineage = []
 			taxid_lineage = []
-			for r in ranks.ranks[0:rankid+1]:
+			# Get rank by name relative to all ranks to output the full lineage
+			for r in all_ranks.ranks[0:all_ranks.getRankID(ranks.getRankName(rankid))+1]:
 				name_lineage.append(nodes[lineage[r]]['name'] if lineage[r] else "")
 				taxid_lineage.append(str(lineage[r]) if lineage[r] else "")
 			txid = int(pr['TaxID'])
