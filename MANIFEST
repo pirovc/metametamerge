@@ -2,10 +2,8 @@
 Databases.py
 MetaMetaMerge.py
 Profile.py
-README
 Ranks.py
 Tools.py
-parse_db.py
 parse_files.py
 parse_tax.py
 setup.py

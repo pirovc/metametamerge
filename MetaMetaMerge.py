@@ -44,7 +44,7 @@ from metametamerge.parse_files import parse_files
 def main():
 	version = '1.1'
 	
-	parser = argparse.ArgumentParser(description='MetaMetaMerge')
+	parser = argparse.ArgumentParser(description='MetaMetaMerge by Vitor C. Piro (vitorpiro@gmail.com, http://github.com/pirovc)')
 	parser.add_argument('-i', '--input-files', metavar='<input_files>', dest="input_files", nargs="*", required=True, help="Input (binning or profiling) files. Bioboxes or tsv format (see README)")
 	parser.add_argument('-d', '--database-profiles', metavar='<database_profiles>', dest="database_profiles", nargs="*", required=True, help="Database profiles on the same order of the input files (see README)")
 	parser.add_argument('-t', '--tool-identifier', metavar='<tool_identifier>', dest="tool_identifier", type=str, required=True, help="Comma-separated identifiers on the same order of the input files")
