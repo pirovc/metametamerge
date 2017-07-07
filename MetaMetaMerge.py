@@ -28,18 +28,18 @@ np.set_printoptions(suppress=True, precision=16, threshold=10000000)
 import argparse, os, math
 from collections import defaultdict
 
-# from metametamerge.Tools import Tools
-# from metametamerge.Databases import Databases
-# from metametamerge.Profile import Profile
-# from metametamerge.Ranks import Ranks
-# from metametamerge.parse_tax import parse_tax
-# from metametamerge.parse_files import parse_files
-from Tools import Tools
-from Databases import Databases
-from Profile import Profile
-from Ranks import Ranks
-from parse_tax import parse_tax
-from parse_files import parse_files
+from metametamerge.Tools import Tools
+from metametamerge.Databases import Databases
+from metametamerge.Profile import Profile
+from metametamerge.Ranks import Ranks
+from metametamerge.parse_tax import parse_tax
+from metametamerge.parse_files import parse_files
+# from Tools import Tools
+# from Databases import Databases
+# from Profile import Profile
+# from Ranks import Ranks
+# from parse_tax import parse_tax
+# from parse_files import parse_files
 
 def main():
 	version = '1.1'

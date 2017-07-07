@@ -1,5 +1,5 @@
-#from metametamerge.Profile import Profile
-from Profile import Profile
+from metametamerge.Profile import Profile
+#from Profile import Profile
 import numpy as np
 
 class Tools(Profile):
